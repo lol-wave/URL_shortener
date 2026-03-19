@@ -2,8 +2,6 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from . import schemas, crud, auth, database, dependencies
-# Remove redis import
-# from redis import Redis
 import os
 from dotenv import load_dotenv
 
@@ -14,21 +12,23 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
-# Allowing all origins (replace with specific origins for production)
 app.add_middleware(
-    CORSMiddleware,  # CORSMiddleware is the middleware to be added
-    allow_origins=["*"],  # or list the specific domains like ["http://localhost:3000"]
+    CORSMiddleware,
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-
-# Remove redis initialization and usage
-# redis = Redis.from_url(os.getenv("REDIS_URL"))
 
 @app.on_event("startup")
 def startup():
     database.Base.metadata.create_all(bind=database.engine)
+    # Auto-create default user if not exists
+    db = next(database.get_db())
+    existing = crud.get_user_by_email(db, "test123@example.com")
+    if not existing:
+        from schemas import UserCreate
+        crud.create_user(db, UserCreate(email="test123@example.com", password="securepassword123"))
 
 @app.post("/shorten", response_model=schemas.URLOut)
 def shorten_url(
@@ -51,9 +51,6 @@ async def redirect_url(short_code: str, db: Session = Depends(database.get_db)):
     db_url = crud.get_url_by_short_code(db, short_code)
     if not db_url:
         raise HTTPException(status_code=404, detail="URL not found")
-
-    # Remove Redis log click functionality
-    # redis.incr(f"clicks:{short_code}")
 
     return RedirectResponse(url=db_url.original_url)
 
